@@ -50,6 +50,8 @@ class Vehicle():
         self.is_armed=False
         self.ground_speed = None
         self.landed_state = None
+        self.battery_status = None          # zamiast 100 - na początku nie znamy stanu
+        self.last_battery_print = 0.0
 
 
     def poll(self, timeout=0.2):
@@ -67,6 +69,7 @@ class Vehicle():
                 position = (msg.lat / 1e7, msg.lon / 1e7, msg.relative_alt / 1000)
                 self.last_position_time = now
                 self.position = position
+                self.ground_speed = m.hypot(msg.vx, msg.vy) / 100    # ustawienie prędkości
     
             elif msg_type == 'BATTERY_STATUS':
                 pct = msg.battery_remaining
@@ -74,7 +77,8 @@ class Vehicle():
     
                 if 0 <= pct <= BATTERY_LIMIT_PCT:
                     self.handle_mission('battery_status')
-                elif msg_type == 'EXTENDED_SYS_STATE':
+            
+            elif msg_type == 'EXTENDED_SYS_STATE':
                     self.landed_state = msg.landed_state
 
         # brak pozycji przez POSITION_TIMEOUT_S -> sprawdzamy łącze
@@ -85,6 +89,7 @@ class Vehicle():
             else:
                 self.handle_mission('heartbeat_not_responding')
                 return
+        self.write_battery_status()
         self.write_coordinates()
     
     def write_coordinates(self):
@@ -96,6 +101,18 @@ class Vehicle():
             distance = round(calculate_distance(self.position, self.start), 2)
             print(f"Odległość od startu: {distance} m")
             self.last_print = time.monotonic()
+
+
+    def write_battery_status(self, interval_s=5.0):
+        """Wypisuje procent baterii co interval_s sekund."""
+        now = time.monotonic()
+        if now - self.last_battery_print < interval_s:
+            return
+        if self.battery_status is None or self.battery_status < 0:
+            print("Bateria: stan nieznany")
+        else:
+            print(f"Bateria: {self.battery_status}%")
+        self.last_battery_print = now     
 
 
     def request_message_interval(self, msg_id, interval_s,):
@@ -128,12 +145,45 @@ class Vehicle():
             raise CommandError(f"Polecenie {command} odrzucone, kod {msg.result}")
 
 
-    def wait_until_stable(self, max_speed=0.3, hold_s = 2.0, timeout=20):
+    def wait_until_stable(self, max_speed=0.5, hold_s = 2.0, timeout=40): #ustalamy timeout 40, bo czujniki prędkości często pokazują 0.3 m/s w "bezruchu"
         """Czeka, aż dron przez hold_s sekund ma prędkość poziomą poniżej max_speed."""
         deadline = time.monotonic() + timeout
+        stable_since = None
+        while time.monotonic() < deadline:
+            self.poll()
+            if self.ground_speed is not None and self.ground_speed < max_speed:
+                if stable_since is None:
+                    stable_since = time.monotonic()
+                if time.monotonic() - stable_since >= hold_s:
+                    return
+            else:
+                print("Dron się ruszył - ponowne sprawdzenie warunków.")
+                stable_since = None          # ruszył się - liczymy od nowa
+        raise TimeoutError(f"Dron nie ustabilizował się nad punktem w ciągu {timeout} s")
 
-         
+    def land(self, timeout=90):
+        """Ląduje pionowo w bieżącym miejscu i czeka na przyziemienie."""
+        self.conn.mav.command_long_send(
+            self.conn.target_system, self.conn.target_component,
+            mavlink.MAV_CMD_NAV_LAND,
+            0,              # confirmation
+            0,              # param1: abort alt (nieużywane w ArduCopterze)
+            0,              # param2: precyzyjne lądowanie wyłączone
+            0,              # param3: puste
+            float('nan'),   # param4: yaw bez zmian
+            0, 0,           # param5, param6: lat/lon = 0 → ląduj tu, gdzie jesteś
+            0,              # param7: wysokość terenu
+        )
+        self.wait_for_ack(mavlink.MAV_CMD_NAV_LAND)
+        print("Lądowanie rozpoczęte")
 
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.poll()
+            if self.landed_state == mavlink.MAV_LANDED_STATE_ON_GROUND:
+                print("Dron wylądował")
+                return True
+        raise TimeoutError(f"Dron nie wylądował w ciągu {timeout} s")
 
     def set_mode(self, mode_name, timeout=10):
         """Ustawia tryb lotu (np. 'GUIDED') i potwierdza zmianę w HEARTBEAT."""
@@ -212,6 +262,20 @@ class Vehicle():
         raise TimeoutError("Nie udało się potwierdzić uzbrojenia")
 
 
+    # def disarm_after_landing(self, auto_wait_s=10, timeout=10):
+    #     """Rozbraja drona, ale tylko gdy stoi na ziemi"""
+    #     #Ta funkcja nie jest nam potrzebna, bo silnik po ustawieniu mode 'LAND' automatycznie się rozbraja
+
+    def check_disarm_confirmation(self, timeout=10):
+        """Sprawdza, czy dron został automatycznie rozbrojony w ciągu 10 sekund od lądowania"""
+        deadline = timeout + time.monotonic()
+        while time.monotonic() < deadline:
+            self.poll()                    
+            if not self.conn.motors_armed():
+                print("Dron rozbrojony automatycznie po lądowaniu")
+                return True
+
+
     def takeoff(self, timeout=30):
         """Wysyła polecenie startu i czeka, aż dron osiągnie TAKEOFF_ALTITUDE_M nad Home."""
         self.conn.mav.command_long_send(
@@ -258,7 +322,6 @@ class Vehicle():
         )
 
 
-
     def wait_until_reached(self, target, tolerance_m=MAX_TARGET_OK_DISTANCE, timeout=180):
         """Pilnuje łączności i baterii w drodze do targetu"""
         self.last_position_time = time.monotonic()
@@ -273,6 +336,12 @@ class Vehicle():
         if remaining <=0:
             raise TimeoutError(f"Nie udało się dotrzeć do celu po {timeout}s.")
 
+
+    def return_home(self, alt_m, tolerance_m=1.0, timeout=120):
+        target = (self.home[0], self.home[1], alt_m)
+        self.goto_position(target)                          # lot nad Home
+        self.wait_until_reached(target, tolerance_m, timeout)  # czekanie na dotarcie
+        self.wait_until_stable()        
 
         
     def ask_operator(self, question):
@@ -428,7 +497,7 @@ class Vehicle():
         # 2: GPS + EKF (każda funkcja rzuca wyjątek, jeśli nie są gotowe)
         self.check_GPS()
         self.check_EKF()
-
+        print("Potwierdzono GPS i EKF")
         # 3: punkt Home i aktualna pozycja drona
         home = self.read_home_position()
         start = self.wait_for_position()
@@ -438,23 +507,18 @@ class Vehicle():
 
         # 4: poziom baterii powyżej progu
         battery_percentage = self.check_the_battery()
+        print(f"Poziom baterii: {battery_percentage}%")
         if battery_percentage == -1:
             raise ValueError("Nie udało się poprawnie odczytać stanu baterii")
         if battery_percentage < MIN_BATTERY_TO_START:
             raise LowBatteryWarning(
                 f"Bateria {battery_percentage}%, minimum do startu to {MIN_BATTERY_TO_START}%"
             )
+        if self.ask_operator("Przygotowanie do startu zakończone sukcesem! Czy rozpocząć lot?"):
+            return start, home, battery_percentage
+        else:
+            raise KeyError("Brak zgody na start. Wstrzymano procedurę startu.")
 
-        return start, home, battery_percentage
-
-    def check_landing_conditions(self):
-        """Sprawdza warunki przed rozpoczęciem lądowania"""
-
-    def start_landing(self):
-        """rozpoczyna procedurę lądowania"""
-
-    def de_arm(self):
-        """rozbraja drona"""
 
     def start_mission(self,start):
         """Główna funkcja misji naszego drona. Przyjmuje start jako krotkę współrzędnych punktu startowego."""

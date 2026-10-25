@@ -3,7 +3,7 @@ import math as m
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
-from conf import MAVLINK_CONNECTION, MAVLINK_DIALECT, SOURCE_SYSTEM, HEARTBEAT_TIMEOUT_S, TAKEOFF_ALTITUDE_M
+from conf import MAVLINK_CONNECTION, MAVLINK_DIALECT, SOURCE_SYSTEM, HEARTBEAT_TIMEOUT_S, TAKEOFF_ALTITUDE_M, MAX_MISSION_DISTANCE, MISSION_ANGLE_DEGREES
 
 from errors import *
 from functions import *
@@ -47,16 +47,17 @@ def main():
         vehicle.start = start
         vehicle.battery_status = battery_status
         vehicle.start_flight()
-        angle = 45
-        lat, lon = destination_point(vehicle.start[0], vehicle.start[1], angle, 100)
+        lat, lon = destination_point(vehicle.start[0], vehicle.start[1], MISSION_ANGLE_DEGREES, MAX_MISSION_DISTANCE)
         target = (lat, lon, TAKEOFF_ALTITUDE_M)
         vehicle.goto_position(target)
         vehicle.wait_until_reached(target, 1.5, 60)
         # powrót nad Home i lądowanie
 
         print("Misja zakończona powodzeniem")
-        vehicle.goto_position(vehicle.home)
-        vehicle.wait_until_reached(vehicle.home, 1.5, 60)
+        vehicle.return_home(TAKEOFF_ALTITUDE_M)
+        vehicle.land()
+        vehicle.check_disarm_confirmation()
+        print("Misja zakończona sukcesem!")
         return 0
 
     except PreflightWarning as e:
