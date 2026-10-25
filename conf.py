@@ -1,6 +1,6 @@
 
 # Dopasuj do przekierowania komunikacji w SITL.
-MAVLINK_CONNECTION = "udpin:0.0.0.0:14550"
+MAVLINK_CONNECTION = "tcp:127.0.0.1:5762"
 MAVLINK_DIALECT = "ardupilotmega"
 HEARTBEAT_TIMEOUT_S = 15
 SOURCE_SYSTEM = 245
