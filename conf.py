@@ -6,7 +6,6 @@ HEARTBEAT_TIMEOUT_S = 15
 SOURCE_SYSTEM = 245
 
 # Przykładowe wartości do symulacji.
-TAKEOFF_ALTITUDE_M = 20
 SEARCH_ALTITUDE_M = 20
 MISSION_TIMEOUT_S = 600
 
@@ -16,3 +15,8 @@ MISSION_ANGLE_DEGREES = 45
 # Testowy czujnik i mechanizm zrzutu.
 DETECTION_SOURCE = "data/detections.json"
 PAYLOAD_SIMULATED = True
+
+#Miasteczko studenckie koordynaty
+TARGET_LATITUDE = 50.068964
+TARGET_LONGITUDE = 19.906171
+TAKEOFF_ALTITUDE_M = 12

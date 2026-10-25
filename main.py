@@ -1,9 +1,9 @@
 from vehicle import Vehicle
-import math as m
+
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
-from conf import MAVLINK_CONNECTION, MAVLINK_DIALECT, SOURCE_SYSTEM, HEARTBEAT_TIMEOUT_S, TAKEOFF_ALTITUDE_M, MAX_MISSION_DISTANCE, MISSION_ANGLE_DEGREES
+from conf import *
 
 from errors import *
 from functions import *
@@ -48,7 +48,7 @@ def main():
         vehicle.battery_status = battery_status
         vehicle.start_flight()
         lat, lon = destination_point(vehicle.start[0], vehicle.start[1], MISSION_ANGLE_DEGREES, MAX_MISSION_DISTANCE)
-        target = (lat, lon, TAKEOFF_ALTITUDE_M)
+        target = (TARGET_LATITUDE, TARGET_LONGITUDE, TAKEOFF_ALTITUDE_M)
         vehicle.goto_position(target)
         vehicle.wait_until_reached(target, 1.5, 60)
         # powrót nad Home i lądowanie
