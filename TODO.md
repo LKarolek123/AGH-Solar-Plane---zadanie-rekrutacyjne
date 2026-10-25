@@ -8,9 +8,10 @@ Road map:
 [X] Check the parametres before drone's start
 [X] Drone right start
 [X] Calculate the road to target
-[?] Reach the target point
-[] Logic if low_battery or lost_connection
-[] Safe road to home
-[] De-arm
-[] Create ML model that detects buildings / people on the map
+[X] Reach the target point
+[X] Logic if low_battery or lost_connection
+[X] Safe road to home
+[X] De-arm
+[X] Mission-accepted
 [] Dokumentacion
+[] Creating a video & github presentation
