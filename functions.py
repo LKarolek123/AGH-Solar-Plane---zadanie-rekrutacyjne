@@ -2,7 +2,6 @@ import math as m
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
-from conf import MAVLINK_CONNECTION, MAVLINK_DIALECT, SOURCE_SYSTEM, HEARTBEAT_TIMEOUT_S
 
 BATTERY_LIMIT_PCT = 30            # battery_remaining jest w procentach 0-100 (-1 = nieznany)
 POSITION_TIMEOUT_S = 3.0          # po tylu sekundach bez pozycji sprawdzamy łącze
@@ -13,7 +12,7 @@ EARTH_RADIUS_M = 6_371_000
 MAX_HOME_OFFSET_M = 5
 MIN_BATTERY_TO_START = 50
 MIN_SATELLITES = 5
-TAKEOFF_ALT_M = 10
+
 
 ############################################################################
 # Teraz piszemy część odpowiedzialną za lot i lądowanie 
@@ -33,7 +32,7 @@ def destination_point(lat, lon, bearing_deg, distance_m):
     return lat, lon
 
 def horizontal_distance(a,b):
-    """liczy odległość kartezjańską między punktami a i b"""
+    return m.sqrt((a[0]-b[0])*(a[0]-b[0])+(a[1]-b[1])*(a[1]-b[1]))
 
 def calculate_distance(start, current):
     """Odległość w metrach między dwoma punktami (lat, lon, alt).

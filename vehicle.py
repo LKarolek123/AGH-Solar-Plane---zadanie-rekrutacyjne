@@ -12,7 +12,7 @@ from errors import *
 BATTERY_LIMIT_PCT = 30            # battery_remaining jest w procentach 0-100 (-1 = nieznany)
 POSITION_TIMEOUT_S = 3.0          # po tylu sekundach bez pozycji sprawdzamy łącze
 
-
+from conf import TAKEOFF_ALTITUDE_M
 
 
 HEARTBEAT_CHECK_TIMEOUT_S = 5.0   # ile czekamy na heartbeat w jednej próbie
@@ -21,7 +21,6 @@ EARTH_RADIUS_M = 6_371_000
 MAX_HOME_OFFSET_M = 5
 MIN_BATTERY_TO_START = 50
 MIN_SATELLITES = 5
-TAKEOFF_ALT_M = 15  #wysokość targetu - to też wysokość, na jaką od początku wzbije się nasz dron
 MAX_TARGET_OK_DISTANCE = 1.5 # trochę większe, żeby nie wywaliło timeerror podczas zwalniania
 
 POSITION_ONLY_MASK = (
@@ -49,6 +48,8 @@ class Vehicle():
         self.last_position_time = 0.0
         self.last_print=0.0
         self.is_armed=False
+        self.ground_speed = None
+        self.landed_state = None
 
 
     def poll(self, timeout=0.2):
@@ -57,10 +58,10 @@ class Vehicle():
             blocking=True,
             timeout=timeout,
         )
-        if msg.get_srcSystem() != self.conn.target_system:
-            return
         now = time.monotonic()
         if msg is not None:
+            if msg.get_srcSystem() != self.conn.target_system:
+                return
             msg_type = msg.get_type()
             if msg_type == 'GLOBAL_POSITION_INT':
                 position = (msg.lat / 1e7, msg.lon / 1e7, msg.relative_alt / 1000)
@@ -73,8 +74,9 @@ class Vehicle():
     
                 if 0 <= pct <= BATTERY_LIMIT_PCT:
                     self.handle_mission('battery_status')
-                    
-    
+                elif msg_type == 'EXTENDED_SYS_STATE':
+                    self.landed_state = msg.landed_state
+
         # brak pozycji przez POSITION_TIMEOUT_S -> sprawdzamy łącze
         if now - self.last_position_time > POSITION_TIMEOUT_S:
             print(f"Brak pozycji drona od {POSITION_TIMEOUT_S} s.")
@@ -124,6 +126,13 @@ class Vehicle():
             if msg.result == mavlink.MAV_RESULT_ACCEPTED:
                 return True
             raise CommandError(f"Polecenie {command} odrzucone, kod {msg.result}")
+
+
+    def wait_until_stable(self, max_speed=0.3, hold_s = 2.0, timeout=20):
+        """Czeka, aż dron przez hold_s sekund ma prędkość poziomą poniżej max_speed."""
+        deadline = time.monotonic() + timeout
+
+         
 
 
     def set_mode(self, mode_name, timeout=10):
@@ -204,13 +213,13 @@ class Vehicle():
 
 
     def takeoff(self, timeout=30):
-        """Wysyła polecenie startu i czeka, aż dron osiągnie TAKEOFF_ALT_M nad Home."""
+        """Wysyła polecenie startu i czeka, aż dron osiągnie TAKEOFF_ALTITUDE_M nad Home."""
         self.conn.mav.command_long_send(
             self.conn.target_system, self.conn.target_component,
             mavlink.MAV_CMD_NAV_TAKEOFF,
             0,                  # confirmation
             0, 0, 0, 0, 0, 0,   # param1–param6 nieużywane w ArduCopterze
-            TAKEOFF_ALT_M,      # param7: wysokość względem Home [m]
+            TAKEOFF_ALTITUDE_M,      # param7: wysokość względem Home [m]
         )
         self.wait_for_ack(mavlink.MAV_CMD_NAV_TAKEOFF)
 
@@ -220,13 +229,14 @@ class Vehicle():
             if msg is None:
                 continue
             alt = msg.relative_alt / 1000       # mm → m, względem Home
-            if alt >= TAKEOFF_ALT_M * 0.95:     # tolerujemy 5% poniżej celu
+            if alt >= TAKEOFF_ALTITUDE_M * 0.95:     # tolerujemy 5% poniżej celu
                 print(f"Osiągnięto wysokość {alt:.1f} m")
                 return True
-        raise TimeoutError(f"Dron nie wzbił się na wysokość {TAKEOFF_ALT_M} m po {timeout} s")
+        raise TimeoutError(f"Dron nie wzbił się na wysokość {TAKEOFF_ALTITUDE_M} m po {timeout} s")
 
     def get_heading(self):
         """zwraca kierunek drona - trzeba ustalić względem czego on jest liczony"""
+
 
     def goto_position(self, target):
         """Przemieszcza drona do punktu o danych współrzędnych"""
@@ -287,11 +297,11 @@ class Vehicle():
 
 
     def wait_for_position(self, timeout=10):
-        """Zwraca (lat [°], lon [°], alt [m n.p.m.]) z pierwszego GLOBAL_POSITION_INT"""
+        """Zwraca (lat [°], lon [°], relative_alt z pierwszego GLOBAL_POSITION_INT"""
         msg = self.conn.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=timeout)
         if msg is None:
             raise TimeoutError('Brak pozycji drona przy starcie')
-        return msg.lat / 1e7, msg.lon / 1e7, msg.alt / 1000
+        return msg.lat / 1e7, msg.lon / 1e7, msg.relative_alt / 1000
 
 
     def check_connection(self, timeout=HEARTBEAT_CHECK_TIMEOUT_S):
@@ -422,7 +432,7 @@ class Vehicle():
         # 3: punkt Home i aktualna pozycja drona
         home = self.read_home_position()
         start = self.wait_for_position()
-        if calculate_distance(start, home) > MAX_HOME_OFFSET_M:
+        if horizontal_distance(start, home) > MAX_HOME_OFFSET_M:
             if not self.ask_operator("Pozycja drona różni się od Home. Kontynuować?"):
                 raise DifferentLandingLocation("Pozycja drona różni się od punktu Home")
 
@@ -451,3 +461,4 @@ class Vehicle():
         target = destination_point(start[0], start[1], 45, 100)
         #target = (lat, lon, rel_alt)
         self.goto_position(target)
+        

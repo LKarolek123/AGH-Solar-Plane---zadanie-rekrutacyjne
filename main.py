@@ -3,7 +3,7 @@ import math as m
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
-from conf import MAVLINK_CONNECTION, MAVLINK_DIALECT, SOURCE_SYSTEM, HEARTBEAT_TIMEOUT_S
+from conf import MAVLINK_CONNECTION, MAVLINK_DIALECT, SOURCE_SYSTEM, HEARTBEAT_TIMEOUT_S, TAKEOFF_ALTITUDE_M
 
 from errors import *
 from functions import *
@@ -40,17 +40,23 @@ def main():
         vehicle.request_message_interval(mavlink.MAVLINK_MSG_ID_BATTERY_STATUS, 1.0)
         vehicle.request_message_interval(mavlink.MAVLINK_MSG_ID_GPS_RAW_INT, 1.0)
         vehicle.request_message_interval(mavlink.MAVLINK_MSG_ID_EKF_STATUS_REPORT, 1.0)
+        vehicle.request_message_interval(mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE, 1.0)
 
-        vehicle.prepare_for_start()
+        start, home, battery_status = vehicle.prepare_for_start()
+        vehicle.home = home
+        vehicle.start = start
+        vehicle.battery_status = battery_status
         vehicle.start_flight()
-        target_altitude = TAKEOFF_ALT_M # na razie w taki sposób, bo nie obsługujemy lotu w pionie
-        lat, lon = destination_point(vehicle.start[0], vehicle.start[1], 45, 100)
-        target = (lat, lon, TAKEOFF_ALT_M)
+        angle = 45
+        lat, lon = destination_point(vehicle.start[0], vehicle.start[1], angle, 100)
+        target = (lat, lon, TAKEOFF_ALTITUDE_M)
         vehicle.goto_position(target)
         vehicle.wait_until_reached(target, 1.5, 60)
-        # później: powrót nad Home i lądowanie
+        # powrót nad Home i lądowanie
 
         print("Misja zakończona powodzeniem")
+        vehicle.goto_position(vehicle.home)
+        vehicle.wait_until_reached(vehicle.home, 1.5, 60)
         return 0
 
     except PreflightWarning as e:
