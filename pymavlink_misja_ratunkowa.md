@@ -16,10 +16,10 @@ Poniżej `conn` oznacza obiekt zwrócony przez `mavutil.mavlink_connection()`. M
 
 | Funkcja / metoda | Zastosowanie w projekcie |
 |---|---|
-| `mavutil.mavlink_connection(...)` | Utworzenie połączenia; adres i port wynikają z konfiguracji SITL. |
-| `mavutil.set_dialect(...)` | Wybór definicji wiadomości; zwykle wystarczy parametr dialect połączenia. |
-| `conn.wait_heartbeat(...)` | Oczekiwanie na obecność autopilota; stosuj timeout. |
-| `conn.recv_match(...)` | Odbiór wybranych typów wiadomości; obsłuż wynik None. |
+<!-- | `mavutil.mavlink_connection(...)` | Utworzenie połączenia; adres i port wynikają z konfiguracji SITL. | -->
+<!-- | `mavutil.set_dialect(...)` | Wybór definicji wiadomości; zwykle wystarczy parametr dialect połączenia. | -->
+<!-- | `conn.wait_heartbeat(...)` | Oczekiwanie na obecność autopilota; stosuj timeout. | -->
+<!-- | `conn.recv_match(...)` | Odbiór wybranych typów wiadomości; obsłuż wynik None. | -->
 | `conn.recv_msg()` | Odbiór pojedynczej wiadomości bez filtra typu. |
 | `conn.mode_mapping()` | Mapa nazw trybów do identyfikatorów dla pojazdu. |
 | `conn.set_mode(...)` | Żądanie zmiany trybu; sprawdzaj rzeczywisty tryb w telemetrii. |
@@ -85,9 +85,9 @@ Przy sterowaniu GUIDED `type_mask` określa aktywne pola. Globalne lat/lon mają
 |---|---|
 | `HEARTBEAT` | Obecność, tryb i uzbrojenie. |
 | `SYS_STATUS` / `BATTERY_STATUS` | Stan systemu i energii. |
-| `GPS_RAW_INT` / `GLOBAL_POSITION_INT` | Jakość GPS i estymowana pozycja globalna. |
+<!-- | `GPS_RAW_INT` / `GLOBAL_POSITION_INT` | Jakość GPS i estymowana pozycja globalna. | -->
 | `LOCAL_POSITION_NED` / `ATTITUDE` / `ATTITUDE_QUATERNION` | Pozycja lokalna i orientacja do lokalizacji celu. |
-| `HOME_POSITION` | Punkt odniesienia powrotu. |
+<!-- | `HOME_POSITION` | Punkt odniesienia powrotu. | -->
 | `EXTENDED_SYS_STATE` | Informacja m.in. o stanie lądowania. |
 | `STATUSTEXT` / `COMMAND_ACK` | Diagnostyka i wynik polecenia. |
 | `DISTANCE_SENSOR` / `OBSTACLE_DISTANCE` | Odległość od powierzchni lub przeszkód, jeśli źródło jest skonfigurowane. |
