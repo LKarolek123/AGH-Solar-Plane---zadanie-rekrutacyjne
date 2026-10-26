@@ -2,6 +2,8 @@
 
 Rozwiązanie zadania rekrutacyjnego AGH Solar Plane 2026 (treść: `Zadanie_rekrutacyjne (1).md`).
 
+## Pełne nagranie symulacji misji w misja_kukurin_90s.mp4
+
 ## 1. Koncepcja misji
 Dron (ArduCopter) startuje, sprawdza, ile realnie zużywa prądu, i ocenia, czy starczy mu baterii na misję.
 Jeśli tak, leci nad Miasteczko Studenckie AGH, odtwarza na pełnej głośności minutę nagrania `Kukurin.mp3`
